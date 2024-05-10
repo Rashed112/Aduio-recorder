@@ -10,15 +10,17 @@ const AddRecord = () => {
   const [mediaRecorder, setMediaRecorder] = useState(null);
   const [audioChunks, setAudioChunks] = useState([]);
 
+  
+
   const startRecording = async () => {
     try {
-      toast.success('Recording started...');
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream);
       recorder.ondataavailable = handleDataAvailable;
       recorder.start();
       setIsRecording(true);
       setMediaRecorder(recorder);
+      toast.success('Recording started...');
     } catch (error) {
       console.error('Error accessing microphone:', error);
       toast.error('Failed to access microphone.');
@@ -30,7 +32,6 @@ const AddRecord = () => {
       mediaRecorder.stop();
       setIsRecording(false);
       toast.success('Recording stopped...');
-      // Call downloadRecording here to automatically trigger the download
       downloadRecording();
     }
   };
@@ -44,26 +45,50 @@ const AddRecord = () => {
     const audioUrl = URL.createObjectURL(audioBlob);
     const link = document.createElement('a');
     link.href = audioUrl;
-    link.download = 'recording.wav';
+    link.download = `${patientId}.wav`;
     document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
+    document.body.removeChild(link); // Cleanup
     URL.revokeObjectURL(audioUrl);
     setAudioChunks([]);
   };
 
+  const sendAudioToServer = async () => {
+    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+    const formData = new FormData();
+    formData.append('audioFile', audioBlob, `${patientId}.wav`);
+    formData.append('patientId', patientId);
+    formData.append('hospitalId', hospitalId);
+
+    try {
+      const response = await fetch(
+        `https://3016-103-197-153-48.ngrok-free.app/upload`,
+        {
+          method: 'POST',
+          body: formData,
+        }
+      );
+
+      const result = await response.json();
+      toast.success('Audio file sent successfully!');
+      console.log(result);
+    } catch (error) {
+      console.error('Failed to send audio:', error);
+      toast.error('Failed to send audio.');
+    }
+  };
+
   const handleSubmit = (event) => {
     event.preventDefault();
-    // Start recording when submitting patient and hospital IDs
     startRecording();
-    console.log('Patient ID:', patientId);
-    console.log('Hospital ID:', hospitalId);
   };
 
   return (
     <Wrapper>
       <Form method="post" className="form" onSubmit={handleSubmit}>
         <h4>Add Record</h4>
+        <br />
+        <br />
         <div className="form-row">
           <label htmlFor="patientId" className="form-label">
             Patient ID:
@@ -78,6 +103,8 @@ const AddRecord = () => {
             required
           />
         </div>
+        <br />
+
         <div className="form-row">
           <label htmlFor="hospitalId" className="form-label">
             Hospital ID:
@@ -92,20 +119,30 @@ const AddRecord = () => {
             required
           />
         </div>
+        <br />
+        <br />
         <button type="submit" className="btn btn-block">
-          Submit
+          Start Recording
         </button>
-      </Form>
-      <div>
-        <h4>Stop Recording and Save It</h4>
+        <br />
+        <br />
         <button
-          className="btn btn-block"
           onClick={stopRecording}
           disabled={!isRecording}
+          className="btn btn-block"
         >
-          Stop and Download Recording
+          Stop Recording and Download
         </button>
-      </div>
+        <br />
+        <br />
+        <button
+          onClick={sendAudioToServer}
+          disabled={audioChunks.length === 0}
+          className="btn btn-block"
+        >
+          Send Audio to Server
+        </button>
+      </Form>
     </Wrapper>
   );
 };
